@@ -9,7 +9,7 @@
 <script>/* apply saved theme before paint */
   (function(){var t=localStorage.getItem('theme'); if(t) document.documentElement.setAttribute('data-theme', t);})();
 </script>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#1f232a">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -42,8 +42,15 @@
         </div>
         <div id="entry-meta" class="entry-meta"></div>
         <div id="entry-note" class="entry-note"></div>
+        <div id="hl-bar" class="hl-bar">
+          <span id="hl-count" class="hl-count">No highlights yet</span>
+          <span class="hl-spacer"></span>
+          <button id="hl-csv" class="hl-btn" title="Export highlighted words/phrases as CSV" disabled>⤓ CSV</button>
+          <button id="hl-txt" class="hl-btn" title="Export as text" disabled>⤓ TXT</button>
+          <button id="hl-clear" class="hl-btn" title="Remove all highlights" disabled>Clear</button>
+        </div>
       </div>
-      <div class="seg-head"><div>Français</div><div>English</div></div>
+      <div class="seg-head"><div>Français <span class="hl-hint">· drag to highlight unfamiliar words, click one to remove</span></div><div>English</div></div>
       <div id="segs"></div>
       <div id="questions"></div>
     </article>
@@ -60,7 +67,7 @@
   </label>
 </footer>
 <script src="data.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
