@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listening — ranked (FR / EN)</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+<script>/* apply saved theme before paint */
+  (function(){var t=localStorage.getItem('theme'); if(t) document.documentElement.setAttribute('data-theme', t);})();
+</script>
+<link rel="stylesheet" href="style.css?v=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f232a">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Listening">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="side-top">
+        <h1>Listening · ranked</h1>
+        <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button>
+      </div>
+      <input id="search" type="search" placeholder="Search transcripts, questions…" autocomplete="off">
+      <div id="filters" class="filters"></div>
+      <div id="count" class="count"></div>
+    </div>
+    <nav id="list"></nav>
+  </aside>
+  <main id="reader">
+    <div id="empty" class="empty">Select a passage on the left. Passages are ordered easiest → hardest (CEFR).</div>
+    <article id="entry" hidden>
+      <div class="entry-head">
+        <button id="back" class="back-btn" type="button">‹ Passages</button>
+        <div class="entry-titlebar">
+          <h2 id="entry-title"></h2>
+        </div>
+        <div id="entry-meta" class="entry-meta"></div>
+        <div id="entry-note" class="entry-note"></div>
+      </div>
+      <div class="seg-head"><div>Français</div><div>English</div></div>
+      <div id="segs"></div>
+      <div id="questions"></div>
+    </article>
+  </main>
+</div>
+<footer id="bar">
+  <div class="np"><span id="np-title">Nothing playing</span></div>
+  <audio id="player" controls preload="none" playsinline></audio>
+  <label class="cont" title="Auto-play passages back-to-back in difficulty order">
+    <input type="checkbox" id="continuous"> 🔁 Continuous
+  </label>
+  <label class="cont" title="In continuous mode, only auto-play the short per-passage clips (skip full-exam tracks)">
+    <input type="checkbox" id="clipsonly"> clips only
+  </label>
+</footer>
+<script src="data.js?v=1"></script>
+<script src="app.js?v=1"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "Listening — ranked (FR/EN)",
+  "short_name": "Listening",
+  "description": "French listening passages ranked by difficulty (CEFR), with aligned French/English transcripts and continuous play.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f2ef",
+  "theme_color": "#1f232a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
