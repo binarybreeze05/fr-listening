@@ -110,8 +110,10 @@ mark.hl:hover{background:#fca5a5;box-shadow:inset 0 -2px 0 #ef4444}
   border:1px solid var(--cardbd);border-radius:6px;padding:3px 8px;cursor:pointer}
 .hl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .hl-btn:disabled{opacity:.4;cursor:default}
-.hl-add{position:fixed;z-index:50;font-size:13px;font-weight:600;color:#fff;background:var(--accent);
-  border:0;border-radius:8px;padding:8px 13px;box-shadow:0 2px 12px rgba(0,0,0,.35);cursor:pointer}
+/* on touch devices: tap a word to highlight — suppress the native selection/callout */
+@media (pointer:coarse){
+  [data-hlkey]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;cursor:pointer}
+}
 
 /* exam-mode passage divider */
 .pass-sub{display:flex;align-items:center;gap:10px;margin:24px 0 2px;padding-top:14px;border-top:2px solid var(--segborder)}

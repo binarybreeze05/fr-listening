@@ -283,8 +283,6 @@
   /* ====================== drag-to-highlight (French only) ====================== */
   var HL_KEY = 'fr-listening-highlights-v1';
   var HLS = []; try { HLS = JSON.parse(localStorage.getItem(HL_KEY) || '[]'); } catch (e) { HLS = []; }
-  var IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
-    (window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
   var hlCount = document.getElementById('hl-count');
   var hlCsv = document.getElementById('hl-csv');
   var hlTxt = document.getElementById('hl-txt');
@@ -327,12 +325,22 @@
     while (e > s && /\s/.test(text[e - 1])) e--;
     return [s, e];
   }
+  function keyText(key) { var r = resolveKey(key); return r ? r.fr : ''; }
+  function trimWS(text, s, e) {
+    while (s < e && /\s/.test(text[s])) s++;
+    while (e > s && /\s/.test(text[e - 1])) e--;
+    return s < e ? [s, e] : null;
+  }
   function addHL(key, s, e) {
+    var text = keyText(key);
     var list = HLS.filter(function (h) { return h.k === key; }).concat([{ k: key, s: s, e: e }]).sort(function (a, b) { return a.s - b.s; });
     var merged = [];
     list.forEach(function (r) {
       var last = merged[merged.length - 1];
-      if (last && r.s <= last.e) last.e = Math.max(last.e, r.e); else merged.push({ k: key, s: r.s, e: r.e });
+      // merge on overlap/touch OR when only whitespace separates the two (so tapping
+      // consecutive words yields one continuous highlight, not gapped fragments)
+      if (last && (r.s <= last.e || (text && !text.slice(last.e, r.s).trim()))) last.e = Math.max(last.e, r.e);
+      else merged.push({ k: key, s: r.s, e: r.e });
     });
     HLS = HLS.filter(function (h) { return h.k !== key; }).concat(merged);
   }
@@ -362,43 +370,48 @@
     saveHL(); return true;
   }
 
-  // Removal: a click/tap on a highlight (works on desktop + mobile).
-  document.addEventListener('click', function (e) {
-    var mk = e.target.closest && e.target.closest('mark.hl'); if (!mk) return;
-    var cont = mk.closest('[data-hlkey]');
-    removeHL(mk.dataset.k, +mk.dataset.s, +mk.dataset.e);
-    if (cont) renderHL(cont, cont._hltext, cont.dataset.hlkey);
-    saveHL();
-  });
-
-  // Add: desktop = instant on mouseup; touch = floating "Highlight" button.
-  var addBtn = null, pending = null;
-  if (IS_TOUCH) {
-    addBtn = document.createElement('button');
-    addBtn.id = 'hl-add'; addBtn.className = 'hl-add'; addBtn.textContent = '✎ Highlight'; addBtn.hidden = true;
-    document.body.appendChild(addBtn);
-    var hideBtn = function () { addBtn.hidden = true; };
-    // Fire on touchstart/mousedown (with preventDefault) so the action runs BEFORE the
-    // tap can collapse the text selection; apply the candidate captured on selectionchange.
-    var onAddTap = function (ev) { ev.preventDefault(); ev.stopPropagation(); if (applyCandidate(pending)) { pending = null; hideBtn(); } };
-    addBtn.addEventListener('touchstart', onAddTap, { passive: false });
-    addBtn.addEventListener('mousedown', onAddTap);
-    var schedule = false;
-    document.addEventListener('selectionchange', function () {
-      if (schedule) return; schedule = true;
-      requestAnimationFrame(function () {
-        schedule = false; pending = candidate();
-        if (!pending) { hideBtn(); return; }
-        var r = pending.rect, top = r.top - 42; if (top < 6) top = r.bottom + 8;
-        var left = Math.min(Math.max(8, r.left + r.width / 2 - 52), window.innerWidth - 112);
-        addBtn.style.top = top + 'px'; addBtn.style.left = left + 'px'; addBtn.hidden = false;
-      });
-    });
-    // hide the button when the user scrolls or taps elsewhere
-    reader.addEventListener('scroll', function () { if (!addBtn.hidden) hideBtn(); });
-  } else {
-    document.addEventListener('mouseup', function () { applyCandidate(candidate()); });
+  // The word at a screen point (via caret hit-testing), expanded to whole-word bounds.
+  function wordAtPoint(x, y) {
+    var node, offset, r;
+    if (document.caretRangeFromPoint) { r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; offset = r.startOffset; } }
+    else if (document.caretPositionFromPoint) { var cp = document.caretPositionFromPoint(x, y); if (cp) { node = cp.offsetNode; offset = cp.offset; } }
+    if (!node) return null;
+    var el = (node.nodeType === 1 ? node : node.parentElement);
+    var container = el && el.closest ? el.closest('[data-hlkey]') : null;
+    if (!container || container._hltext == null) return null;
+    var pos = offsetFromStart(container, node, offset);
+    var text = container._hltext, s = pos, e = pos;
+    while (s > 0 && WORDCH.test(text[s - 1])) s--;
+    while (e < text.length && WORDCH.test(text[e])) e++;
+    if (s >= e) return null;
+    return { container: container, key: container.dataset.hlkey, text: text, s: s, e: e };
   }
+  function wordCovered(key, s, e) { return HLS.some(function (h) { return h.k === key && h.s <= s && h.e >= e; }); }
+  function subtractHL(key, s, e) {
+    var text = keyText(key), out = [];
+    HLS.forEach(function (h) {
+      if (h.k !== key || h.e <= s || h.s >= e) { out.push(h); return; }   // keep: other key / no overlap
+      var L = h.s < s ? trimWS(text, h.s, s) : null;                       // left remainder, whitespace-trimmed
+      var R = h.e > e ? trimWS(text, e, h.e) : null;                       // right remainder
+      if (L) out.push({ k: key, s: L[0], e: L[1] });
+      if (R) out.push({ k: key, s: R[0], e: R[1] });
+    });
+    HLS = out;
+  }
+  function toggleWordAt(x, y) {
+    var w = wordAtPoint(x, y); if (!w) return false;
+    if (wordCovered(w.key, w.s, w.e)) subtractHL(w.key, w.s, w.e); else addHL(w.key, w.s, w.e);
+    renderHL(w.container, w.text, w.key); saveHL(); return true;
+  }
+  var lastApply = 0;
+  function nowt() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+  // Tap / click a word = toggle its highlight (primary, works on phone — no text selection).
+  // Desktop drag-select still highlights a whole phrase.
+  document.addEventListener('mouseup', function () { if (applyCandidate(candidate())) lastApply = nowt(); });
+  document.addEventListener('click', function (e) {
+    if (nowt() - lastApply < 400) return;          // swallow the click that trails a drag-select
+    toggleWordAt(e.clientX, e.clientY);
+  });
 
   function updateHLCount() {
     var n = HLS.length, uniq = {};
