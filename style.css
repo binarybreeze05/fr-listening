@@ -45,6 +45,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
   width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;
   display:flex;align-items:center;justify-content:center;padding:0;flex:0 0 auto}
 .theme-toggle:hover{background:rgba(255,255,255,.08)}
+.modenav{display:flex;gap:6px;margin-bottom:10px}
+.modetab{flex:1;text-align:center;font-size:11px;font-weight:600;text-decoration:none;color:var(--sidemuted);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:6px 4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modetab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.modetab:hover:not(.active){background:rgba(255,255,255,.1)}
 #search{width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:var(--search);color:#fff;font-size:13px;outline:none}
 #search::placeholder{color:var(--sidemuted)}
 .filters{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
@@ -104,6 +110,15 @@ mark.hl:hover{background:#fca5a5;box-shadow:inset 0 -2px 0 #ef4444}
   border:1px solid var(--cardbd);border-radius:6px;padding:3px 8px;cursor:pointer}
 .hl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .hl-btn:disabled{opacity:.4;cursor:default}
+.hl-add{position:fixed;z-index:50;font-size:13px;font-weight:600;color:#fff;background:var(--accent);
+  border:0;border-radius:8px;padding:8px 13px;box-shadow:0 2px 12px rgba(0,0,0,.35);cursor:pointer}
+
+/* exam-mode passage divider */
+.pass-sub{display:flex;align-items:center;gap:10px;margin:24px 0 2px;padding-top:14px;border-top:2px solid var(--segborder)}
+.pass-sub:first-child{border-top:0;padding-top:0;margin-top:4px}
+.pass-q{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;flex:none}
+.pass-cefr{font-size:10px;font-weight:700;color:#fff;background:var(--grouplabel);border-radius:5px;padding:1px 6px;flex:none}
+.pass-snip{font-size:11px;color:var(--muted);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 
 /* questions */
 #questions{padding:18px 28px 36px}
@@ -148,4 +163,9 @@ ul.opts li.correct .fr::after{content:" ✓";color:var(--correct-fg)}
   .back-btn{display:inline-block}
   .entry-head{position:sticky;top:0;z-index:3}
   .seg-head{display:none}
+  /* audio scrubber needs a full row so it isn't squeezed out next to the labels */
+  #bar{flex-wrap:wrap;gap:8px 12px}
+  #bar .np{order:1;flex:1 1 auto;max-width:none}
+  .cont{order:2}
+  #bar audio{order:3;flex-basis:100%;width:100%;min-width:0}
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Listening — ranked (FR / EN)</title>
+<title>CO mock exams (FR / EN)</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="googlebot" content="noindex, nofollow">
 <script>/* apply saved theme before paint */
@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Listening">
+<meta name="apple-mobile-web-app-title" content="CO exams">
 </head>
 <body>
 <div id="app">
@@ -27,20 +27,20 @@
         <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button>
       </div>
       <div class="modenav">
-        <a class="modetab active" href="index.html">🎧 2026 · ranked</a>
-        <a class="modetab" href="exams.html">💿 CO mock exams</a>
+        <a class="modetab" href="index.html">🎧 2026 · ranked</a>
+        <a class="modetab active" href="exams.html">💿 CO mock exams</a>
       </div>
-      <input id="search" type="search" placeholder="Search transcripts, questions…" autocomplete="off">
+      <input id="search" type="search" placeholder="Search exams, transcripts…" autocomplete="off">
       <div id="filters" class="filters"></div>
       <div id="count" class="count"></div>
     </div>
     <nav id="list"></nav>
   </aside>
   <main id="reader">
-    <div id="empty" class="empty">Select a passage on the left. Passages are ordered easiest → hardest (CEFR).</div>
+    <div id="empty" class="empty">Select an exam on the left. Each exam is one continuous recording — read the transcript top-to-bottom as it plays.</div>
     <article id="entry" hidden>
       <div class="entry-head">
-        <button id="back" class="back-btn" type="button">‹ Passages</button>
+        <button id="back" class="back-btn" type="button">‹ Exams</button>
         <div class="entry-titlebar">
           <h2 id="entry-title"></h2>
         </div>
@@ -54,7 +54,7 @@
           <button id="hl-clear" class="hl-btn" title="Remove all highlights" disabled>Clear</button>
         </div>
       </div>
-      <div class="seg-head"><div>Français <span class="hl-hint">· drag to highlight unfamiliar words, click one to remove</span></div><div>English</div></div>
+      <div class="seg-head"><div>Français <span class="hl-hint">· select text to highlight unfamiliar words, tap/click one to remove</span></div><div>English</div></div>
       <div id="segs"></div>
       <div id="questions"></div>
     </article>
@@ -63,11 +63,11 @@
 <footer id="bar">
   <div class="np"><span id="np-title">Nothing playing</span></div>
   <audio id="player" controls preload="none" playsinline></audio>
-  <label class="cont" title="Auto-play passages back-to-back in difficulty order">
+  <label class="cont" title="When an exam recording ends, auto-play the next exam">
     <input type="checkbox" id="continuous"> 🔁 Continuous
   </label>
 </footer>
-<script>window.MODE = 'ranked';</script>
+<script>window.MODE = 'exams';</script>
 <script src="data.js?v=2"></script>
 <script src="app.js?v=3"></script>
 <script>
