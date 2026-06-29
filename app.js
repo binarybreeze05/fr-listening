@@ -3,6 +3,7 @@
   var MODE = (window.MODE === 'exams') ? 'exams' : 'ranked';
   // ranked page = 2026 course (per-passage clips, CEFR-ranked); exams page = CO mock exams (one track/exam)
   var DATA = ALL.filter(function (p) { return MODE === 'exams' ? p.course === 'co1' : p.course === 'co2'; });
+  var DUPES = window.DUPES || {};   // co1 qref -> { dim, tscore, oscore, to:{exam,rank,id,qref} }
 
   var listEl = document.getElementById('list');
   var searchEl = document.getElementById('search');
@@ -39,6 +40,18 @@
   /* ---- continuous ---- */
   contEl.checked = localStorage.getItem('continuous-' + MODE) === '1';
   contEl.addEventListener('change', function () { localStorage.setItem('continuous-' + MODE, contEl.checked ? '1' : '0'); });
+
+  /* ---- drill mode (hide transcript/translations/answer; reveal after answering) ---- */
+  var drillBtn = document.getElementById('drill-toggle');
+  var DRILL = localStorage.getItem('drill-' + MODE) === '1';
+  function paintDrill() {
+    document.body.classList.toggle('drill', DRILL);
+    if (drillBtn) { drillBtn.classList.toggle('on', DRILL); drillBtn.textContent = DRILL ? '🎯 Drill: ON' : '🎯 Drill'; }
+  }
+  if (drillBtn) drillBtn.addEventListener('click', function () {
+    DRILL = !DRILL; localStorage.setItem('drill-' + MODE, DRILL ? '1' : '0'); paintDrill(); rerenderReader(); renderList();
+  });
+  paintDrill();
 
   document.getElementById('back').addEventListener('click', function () { document.body.classList.remove('detail'); });
   function isMobile() { return window.matchMedia('(max-width:680px)').matches; }
@@ -84,6 +97,17 @@
         html += '<div class="consigne"><span class="lbl">Consigne</span><div class="fr"></div><div class="en"></div></div>';
       html += '<div class="q-instr"><div class="fr"></div><div class="en"></div></div>';
       card.innerHTML = html;
+      var dup = DUPES[q.qref];
+      if (dup && dup.to) {
+        var part = (dup.to.exam || '').replace('co-2026-part-', 'part ');
+        var db = document.createElement('a');
+        db.className = 'dupe-badge';
+        db.href = 'index.html#go=' + encodeURIComponent(dup.to.id);
+        db.textContent = '↻ also in 2026 · ' + part;
+        db.title = 'This question repeats a 2026 item (' + part + ', #' + dup.to.rank + ') — matched on '
+          + dup.dim + '. Click to open the 2026 version.';
+        card.insertBefore(db, card.firstChild);
+      }
       if (q.consigne && q.consigne.fr) {
         var cons = card.querySelector('.consigne');
         hlText(cons.querySelector('.fr'), q.consigne.fr, p.id + '#c' + qi);
@@ -117,28 +141,40 @@
     });
   }
   function appendPassage(host, p, withSub) {
+    var wrap = document.createElement('div'); wrap.className = 'passage';
+    wrap.dataset.pid = p.id; wrap.dataset.nq = p.questions.length;
     if (withSub) {
       var h = document.createElement('div'); h.className = 'pass-sub';
       h.innerHTML = '<span class="pass-q">Q' + qnums(p).join(', Q') + '</span>' +
         '<span class="pass-cefr">' + p.cefr + '</span>' +
         '<span class="pass-snip"></span>';
       h.querySelector('.pass-snip').textContent = snippet(p, 70);
-      host.appendChild(h);
+      wrap.appendChild(h);
     }
-    appendTranscript(host, p);
-    appendQuestions(host, p);
+    // drill-only control (hidden by CSS otherwise): reveal this passage's answer + transcript
+    var db = document.createElement('div'); db.className = 'drill-bar';
+    db.innerHTML = '<button type="button" class="drill-reveal">👁 Reveal answer' +
+      (p.questions.length > 1 ? 's' : '') + ' &amp; transcript</button>';
+    wrap.appendChild(db);
+    appendTranscript(wrap, p);
+    appendQuestions(wrap, p);
+    host.appendChild(wrap);
   }
 
   function metaPill(host) { return function (html) { var s = document.createElement('span'); s.className = 'b'; s.innerHTML = html; host.appendChild(s); }; }
 
   function renderRanked(p) {
-    document.getElementById('entry-title').textContent = '#' + p.rank + ' · ' + snippet(p, 70);
+    var drilling = document.body.classList.contains('drill');
+    document.getElementById('entry-title').textContent = drilling
+      ? ('#' + p.rank + ' · 🎯 Drill — listen & answer')
+      : ('#' + p.rank + ' · ' + snippet(p, 70));
     var meta = document.getElementById('entry-meta'); meta.innerHTML = ''; var b = metaPill(meta);
     b('<span class="cefr-pill">' + p.cefr + '</span>');
     b('difficulty ' + p.score + '/100'); b('section ' + p.section);
     b(p.words + ' words'); b(p.questions.length + ' question' + (p.questions.length === 1 ? '' : 's'));
-    document.getElementById('entry-note').textContent =
-      '🎧 Per-passage audio clip.' + (p.rationale ? '  ·  ' + p.rationale : '');
+    document.getElementById('entry-note').textContent = drilling
+      ? '🎯 Drill — play the audio, choose your answer, then the transcript & translation reveal.'
+      : ('🎧 Per-passage audio clip.' + (p.rationale ? '  ·  ' + p.rationale : ''));
     segsEl.innerHTML = ''; questionsEl.innerHTML = '';
     appendPassage(segsEl, p, false);
   }
@@ -146,8 +182,9 @@
     document.getElementById('entry-title').textContent = examLabel(ex.slug);
     var meta = document.getElementById('entry-meta'); meta.innerHTML = ''; var b = metaPill(meta);
     b('💿 full exam recording'); b(ex.passages.length + ' passages'); b(ex.nQ + ' questions');
-    document.getElementById('entry-note').textContent =
-      'One continuous recording — the transcript below is in the order you hear it. Read along as it plays; the questions are inline after each passage.';
+    document.getElementById('entry-note').textContent = document.body.classList.contains('drill')
+      ? '🎯 Drill — for each passage, answer from the audio; the transcript & translation reveal once all its questions are answered.'
+      : 'One continuous recording — the transcript below is in the order you hear it. Read along as it plays; the questions are inline after each passage.';
     segsEl.innerHTML = ''; questionsEl.innerHTML = '';
     ex.passages.forEach(function (p) { appendPassage(segsEl, p, true); });
   }
@@ -173,8 +210,9 @@
     var p = byId(id); if (!p) return;
     curId = id; showReader(); renderRanked(p);
     if (player.getAttribute('data-file') !== p.audio) { player.src = p.audio; player.setAttribute('data-file', p.audio); }
-    npTitle.textContent = '#' + p.rank + ' · ' + snippet(p, 40);
-    setMedia('#' + p.rank + ' ' + snippet(p, 50), 'FR Listening — ' + p.cefr, p.exam);
+    var drilling = document.body.classList.contains('drill');
+    npTitle.textContent = drilling ? ('#' + p.rank + ' · 🎯 Drill') : ('#' + p.rank + ' · ' + snippet(p, 40));
+    setMedia(drilling ? ('#' + p.rank + ' · Drill') : ('#' + p.rank + ' ' + snippet(p, 50)), 'FR Listening — ' + p.cefr, p.exam);
     if (autoplay) { lastPlayedFile = p.audioFile; var pr = player.play(); if (pr && pr.catch) pr.catch(function () {}); }
     renderList();
   }
@@ -222,7 +260,7 @@
       el.className = 'item' + (isCur ? ' active' : '') + (isCur && !player.paused ? ' playing' : '');
       el.innerHTML = '<div class="rank">#' + p.rank + '</div><div class="meta"><div class="t"></div>' +
         '<div class="d"><span class="badge">' + p.cefr + '</span><span class="ex"></span></div></div>';
-      el.querySelector('.t').textContent = snippet(p);
+      el.querySelector('.t').textContent = document.body.classList.contains('drill') ? '🎯 Drill — listen & answer' : snippet(p);
       el.querySelector('.ex').textContent = '🎧 ' + p.questions.length + 'q';
       el.onclick = function () { loadRanked(p.id, contEl.checked); if (isMobile()) document.body.classList.add('detail'); };
       listEl.appendChild(el);
@@ -287,6 +325,9 @@
   var hlCsv = document.getElementById('hl-csv');
   var hlTxt = document.getElementById('hl-txt');
   var hlClear = document.getElementById('hl-clear');
+  var hlBackup = document.getElementById('hl-backup');
+  var hlRestore = document.getElementById('hl-restore');
+  var hlFile = document.getElementById('hl-file');
 
   function renderHL(el, text, key) {
     el.textContent = '';
@@ -407,8 +448,9 @@
   function nowt() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
   // Tap / click a word = toggle its highlight (primary, works on phone — no text selection).
   // Desktop drag-select still highlights a whole phrase.
-  document.addEventListener('mouseup', function () { if (applyCandidate(candidate())) lastApply = nowt(); });
+  document.addEventListener('mouseup', function () { if (document.body.classList.contains('drill')) return; if (applyCandidate(candidate())) lastApply = nowt(); });
   document.addEventListener('click', function (e) {
+    if (document.body.classList.contains('drill')) return;   // in drill mode, taps answer questions
     if (nowt() - lastApply < 400) return;          // swallow the click that trails a drag-select
     toggleWordAt(e.clientX, e.clientY);
   });
@@ -418,7 +460,7 @@
     HLS.forEach(function (h) { var p = phraseOf(h); if (p) uniq[p.toLowerCase()] = 1; });
     var u = Object.keys(uniq).length;
     hlCount.textContent = n ? (n + ' highlight' + (n > 1 ? 's' : '') + ' · ' + u + ' unique') : 'No highlights yet';
-    [hlCsv, hlTxt, hlClear].forEach(function (b) { b.disabled = !n; });
+    [hlCsv, hlTxt, hlBackup, hlClear].forEach(function (b) { b.disabled = !n; });
   }
   function collectHL() {
     var map = {}, order = [];
@@ -457,8 +499,148 @@
     HLS = []; rerenderReader(); saveHL();
   };
 
+  /* ---- lossless backup / restore (JSON canonical; CSV best-effort fallback) ---- */
+  hlBackup.onclick = function () {
+    if (!HLS.length) return;
+    download(new Blob([JSON.stringify(HLS)], { type: 'application/json' }), 'fr-highlights-backup.json');
+  };
+  hlRestore.onclick = function () { hlFile.value = ''; hlFile.click(); };
+
+  // passage lookup by rank, over ALL passages (the highlight store spans both courses)
+  var RANKX = {}; ALL.forEach(function (p) { RANKX[p.rank] = p; });
+
+  // every highlightable slot of a passage, mirroring exactly how the reader renders them
+  function passageSlots(p) {
+    var out = [];
+    p.transcript.forEach(function (s, si) { out.push({ k: p.id + '#t' + si, fr: s.fr }); });
+    p.questions.forEach(function (q, qi) {
+      out.push({ k: p.id + '#i' + qi, fr: q.instruction.fr });
+      if (q.consigne && q.consigne.fr) out.push({ k: p.id + '#c' + qi, fr: q.consigne.fr });
+      var opts = q.options || [];
+      if (opts.some(function (o) { return o.fr || o.en || o.is_img; }))
+        opts.forEach(function (o, oi) {
+          if (o.is_img && o.img) return;
+          if (o.fr && o.fr.length > 1) out.push({ k: p.id + '#o' + qi + '.' + oi, fr: o.fr });
+        });
+    });
+    return out;
+  }
+  function normCmp(s) { return (s || '').normalize('NFC').replace(/[’ʼ‘]/g, "'").replace(/\s+/g, ' ').trim(); }
+  function allOffsets(hay, needle, ci) {
+    var H = ci ? hay.toLowerCase() : hay, N = ci ? needle.toLowerCase() : needle, out = [], i = H.indexOf(N);
+    while (i >= 0) { out.push(i); i = H.indexOf(N, i + 1); }
+    return out;
+  }
+  // minimal RFC4180 CSV parser (handles quoted commas/quotes/colons)
+  function parseCSV(text) {
+    var rows = [], row = [], cur = '', q = false, i, c;
+    text = text.replace(/^﻿/, '');
+    for (i = 0; i < text.length; i++) {
+      c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\r') { /* skip */ }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  // reconstruct {k,s,e} from the (lossy) CSV study export — best effort, same-passage only
+  function reconstructFromCSV(text) {
+    var rows = parseCSV(text); if (!rows.length) return [];
+    var start = (rows[0][0] || '').toLowerCase().indexOf('highlight') === 0 ? 1 : 0, out = [], r;
+    for (r = start; r < rows.length; r++) {
+      var row = rows[r]; if (row.length < 6) continue;
+      var phrase = row[0], occ = parseInt(row[1], 10) || 1, rank = parseInt(row[3], 10), seg = row[5];
+      var p = RANKX[rank]; if (!p) continue;
+      var slots = passageSlots(p);
+      var keys = slots.filter(function (s) { return s.fr === seg; });
+      if (!keys.length) keys = slots.filter(function (s) { return normCmp(s.fr) === normCmp(seg); });
+      if (!keys.length) continue;
+      var prim = keys[0], offs = allOffsets(prim.fr, phrase, false);
+      if (!offs.length) offs = allOffsets(prim.fr, phrase, true);
+      if (!offs.length) continue;
+      out.push({ k: prim.k, s: offs[0], e: offs[0] + phrase.length });
+      var need = occ - 1, oi, si, j;
+      for (oi = 1; oi < offs.length && need > 0; oi++) { out.push({ k: prim.k, s: offs[oi], e: offs[oi] + phrase.length }); need--; }
+      for (si = 0; si < slots.length && need > 0; si++) {
+        if (slots[si].k === prim.k) continue;
+        var o2 = allOffsets(slots[si].fr, phrase, true);
+        for (j = 0; j < o2.length && need > 0; j++) { out.push({ k: slots[si].k, s: o2[j], e: o2[j] + phrase.length }); need--; }
+      }
+    }
+    return out;
+  }
+  function mergeHighlights(list) {
+    var valid = 0, bad = 0, added = 0;
+    list.forEach(function (h) {
+      if (!h || typeof h.k !== 'string' || h.k.indexOf('#') < 0) { bad++; return; }
+      var t = keyText(h.k), s = +h.s, e = +h.e;
+      if (!t || !(s >= 0) || !(e > s) || e > t.length || !t.slice(s, e).trim()) { bad++; return; }
+      if (!wordCovered(h.k, s, e)) added++;   // genuinely-new coverage (addHL merges adjacent ranges, so length deltas mislead)
+      addHL(h.k, s, e); valid++;
+    });
+    return { valid: valid, bad: bad, added: added };
+  }
+  hlFile.onchange = function () {
+    var f = hlFile.files && hlFile.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var text = String(rd.result || ''), list, kind;
+      try {
+        if (/\.json$/i.test(f.name) || text.trim().charAt(0) === '[') { list = JSON.parse(text); kind = 'JSON backup'; }
+        else { list = reconstructFromCSV(text); kind = 'CSV export'; }
+      } catch (e) { alert('Could not read that file: ' + e.message); return; }
+      if (!Array.isArray(list) || !list.length) { alert('No highlights found in that file.'); return; }
+      var res = mergeHighlights(list);
+      saveHL(); rerenderReader();
+      var already = res.valid - res.added;
+      alert('Restored from ' + kind + ':\n' + res.valid + ' valid entr' + (res.valid === 1 ? 'y' : 'ies') + ' read'
+        + (res.bad ? ', ' + res.bad + ' skipped (stale/invalid)' : '') + '.\n'
+        + res.added + ' newly added' + (already > 0 ? ' (' + already + ' already present)' : '') + '.');
+    };
+    rd.readAsText(f);
+  };
+
+  /* ---- drill interactions: click an option to answer; reveal on completion ---- */
+  function revealPassage(w, force) {
+    if (!w) return;
+    w.classList.add('revealed');
+    if (force) { var cs = w.querySelectorAll('.qcard:not(.answered)'); for (var i = 0; i < cs.length; i++) cs[i].classList.add('answered'); }
+  }
+  // capture phase so this wins over the document-level highlight handlers
+  segsEl.addEventListener('click', function (e) {
+    if (!document.body.classList.contains('drill')) return;
+    var t = e.target;
+    var rev = t.closest ? t.closest('.drill-reveal') : null;
+    if (rev) { e.stopPropagation(); e.preventDefault(); revealPassage(rev.closest('.passage'), true); return; }
+    var li = t.closest ? t.closest('ul.opts > li') : null;
+    if (!li) return;
+    var card = li.closest('.qcard'); if (!card || card.classList.contains('answered')) return;
+    e.stopPropagation(); e.preventDefault();
+    card.classList.add('answered');
+    li.classList.add('chosen'); if (!li.classList.contains('correct')) li.classList.add('wrong');
+    var w = card.closest('.passage'); if (!w) return;
+    var total = +w.dataset.nq || w.querySelectorAll('.qcard').length;
+    if (w.querySelectorAll('.qcard.answered').length >= total) revealPassage(w, false);
+  }, true);
+
   /* ====================== boot ====================== */
   if (MODE === 'exams') { if (filtersEl) filtersEl.style.display = 'none'; renderExamList(); }
   else { renderFilters(); renderRankedList(); }
   updateHLCount();
+
+  // deep-link from the exams "also in 2026" badge: index.html#go=<passageId>
+  if (MODE !== 'exams') {
+    var openHash = function () {
+      var m = (location.hash || '').match(/^#go=(.+)$/);
+      if (!m) return;
+      var id; try { id = decodeURIComponent(m[1]); } catch (e) { return; }
+      if (byId(id)) { loadRanked(id, false); if (isMobile()) document.body.classList.add('detail'); }
+    };
+    openHash();
+    window.addEventListener('hashchange', openHash);
+  }
 })();

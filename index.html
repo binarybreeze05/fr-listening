@@ -9,7 +9,7 @@
 <script>/* apply saved theme before paint */
   (function(){var t=localStorage.getItem('theme'); if(t) document.documentElement.setAttribute('data-theme', t);})();
 </script>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#1f232a">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -43,14 +43,18 @@
         <button id="back" class="back-btn" type="button">‹ Passages</button>
         <div class="entry-titlebar">
           <h2 id="entry-title"></h2>
+          <button id="drill-toggle" class="drill-toggle" type="button" title="Hide transcript & translations; answer from the audio, then reveal">🎯 Drill</button>
         </div>
         <div id="entry-meta" class="entry-meta"></div>
         <div id="entry-note" class="entry-note"></div>
         <div id="hl-bar" class="hl-bar">
           <span id="hl-count" class="hl-count">No highlights yet</span>
           <span class="hl-spacer"></span>
-          <button id="hl-csv" class="hl-btn" title="Export highlighted words/phrases as CSV" disabled>⤓ CSV</button>
+          <button id="hl-csv" class="hl-btn" title="Export highlighted words/phrases as CSV (study list)" disabled>⤓ CSV</button>
           <button id="hl-txt" class="hl-btn" title="Export as text" disabled>⤓ TXT</button>
+          <button id="hl-backup" class="hl-btn" title="Download a lossless backup of ALL highlights (JSON)" disabled>⤓ Backup</button>
+          <button id="hl-restore" class="hl-btn" title="Restore highlights from a backup (.json) or CSV export">⤒ Restore</button>
+          <input id="hl-file" type="file" accept=".json,.csv,application/json,text/csv" hidden>
           <button id="hl-clear" class="hl-btn" title="Remove all highlights" disabled>Clear</button>
         </div>
       </div>
@@ -69,7 +73,8 @@
 </footer>
 <script>window.MODE = 'ranked';</script>
 <script src="data.js?v=2"></script>
-<script src="app.js?v=5"></script>
+<script src="dupes.js?v=1"></script>
+<script src="app.js?v=6"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
