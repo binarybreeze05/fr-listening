@@ -258,14 +258,20 @@
   }
 
   /* ====================== interaction ====================== */
+  function doReveal() {
+    if (revealed) return;
+    revealed = true;
+    stopAudio();            // revealing the answer stops the clip (no more listening needed)
+    paintReveal(); paintChrome();
+  }
   function onOption(li) {
     if (revealed) return;
     li.classList.add('chosen');
     if (li.dataset.correct === '1') sess.right++; else sess.wrong++;
-    revealed = true; paintReveal(); paintChrome();
+    doReveal();
   }
   function primaryAction() {
-    if (!revealed) { revealed = true; paintReveal(); paintChrome(); }
+    if (!revealed) doReveal();
     else next();
   }
   function next() {
@@ -319,7 +325,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); primaryAction(); }
     else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prev(); }
-    else if (e.key === 'r' || e.key === 'R') { if (!revealed) { revealed = true; paintReveal(); paintChrome(); } }
+    else if (e.key === 'r' || e.key === 'R') { doReveal(); }
     else if (e.key === 'k' || e.key === 'K') { toggleKnown(); }
     else if (e.key === 's' || e.key === 'S') { setToggle('shuffle', !S.shuffle); }
   });
