@@ -1,0 +1,401 @@
+(function () {
+  /* FR Listening — ⚡ Cram: a full-screen flashcard stack for fast recognition
+     memorization. One question per card (instruction + MCQ options), correct option
+     lit green. Default flow: tap → reveal → tap → next. Optional self-test by tapping
+     the option you think is right. Scope/shuffle/dedupe/FR-only/known toggles.
+     Reads the same data.js (courses co1 = mock exams, co2 = 2026) and dupes.js
+     (co1 qref -> 2026 overlap) the reader uses. Per-passage audio clips get a ▶ button;
+     the drawing questions (options A/B/C/D) show their image set. No highlight subsystem. */
+  var ALL = (window.PASSAGES || []).slice();
+  var DUPES = window.DUPES || {};   // co1 qref -> {to:{...}}  (mock recurs in 2026)
+
+  /* ---- theme ---- */
+  var root = document.documentElement, themeBtn = document.getElementById('theme-toggle');
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  function effTheme() { return root.getAttribute('data-theme') || (mq.matches ? 'dark' : 'light'); }
+  function paintThemeIcon() { themeBtn.textContent = effTheme() === 'dark' ? '☀︎' : '☾'; }
+  themeBtn.addEventListener('click', function () {
+    var next = effTheme() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next); localStorage.setItem('theme', next); paintThemeIcon();
+  });
+  mq.addEventListener('change', function () { if (!localStorage.getItem('theme')) paintThemeIcon(); });
+  paintThemeIcon();
+
+  /* ---- settings (persisted) ---- */
+  var S = { scope: 'all', cefr: 'all', shuffle: false, reveal: false, dedupe: false, fr: false, hidknown: false };
+  try { var saved = JSON.parse(localStorage.getItem('cram-listening-set') || '{}'); for (var k in saved) if (k in S) S[k] = saved[k]; } catch (e) {}
+  function saveSettings() { try { localStorage.setItem('cram-listening-set', JSON.stringify(S)); } catch (e) {} }
+
+  /* ---- known set (qref -> 1) ---- */
+  var KNOWN = {};
+  try { (JSON.parse(localStorage.getItem('cram-listening-known') || '[]') || []).forEach(function (q) { KNOWN[q] = 1; }); } catch (e) {}
+  function saveKnown() { try { localStorage.setItem('cram-listening-known', JSON.stringify(Object.keys(KNOWN))); } catch (e) {} }
+
+  /* ---- helpers ---- */
+  function examNum(slug) { var m = (slug || '').match(/(\d+)/); return m ? +m[1] : 0; }
+  function examLabel(slug) {
+    return (slug || '').replace('co-mock-exam-', 'CO mock exam ').replace('co-2026-part-', '2026 part ');
+  }
+  function qnum(qref) { return (qref || '').split('#')[1] || ''; }
+  function srcLabel(c) {
+    if (c.p.course === 'co2') return '2026 · #' + c.p.rank;
+    return examLabel(c.p.exam) + ' · Q' + qnum(c.q.qref);
+  }
+  function isLetter(o) { return o && !o.is_img && typeof o.fr === 'string' && o.fr.trim().length <= 2 && (!o.en || o.en.trim() === o.fr.trim()); }
+
+  /* ---- one shared audio element for the ▶ clip button ---- */
+  var audio = new Audio(); audio.preload = 'none';
+  function stopAudio() { try { audio.pause(); } catch (e) {} }
+
+  /* ---- build the full card list once (every question in the dataset) ---- */
+  var CARDS = [];
+  ALL.forEach(function (p) {
+    (p.questions || []).forEach(function (q, qi) {
+      if (!q || !q.options) return;
+      CARDS.push({ p: p, q: q, qi: qi, qref: q.qref, course: p.course || 'co1' });
+    });
+  });
+
+  /* ---- ordering / filtering per current settings ---- */
+  function inScope(c) {
+    if (S.scope === 'co2') return c.course === 'co2';
+    if (S.scope === 'co1') return c.course === 'co1';
+    return true;
+  }
+  function isRepeat(c) {
+    // when deduping across the whole set, drop the mock copy that recurs in 2026 (keep 2026)
+    return c.course === 'co1' && DUPES[c.qref] && DUPES[c.qref].to;
+  }
+  function baseSort(a, b) {
+    // 2026 (ranked) first, then mocks in test order
+    var ca = a.course === 'co2' ? 0 : 1, cb = b.course === 'co2' ? 0 : 1;
+    if (ca !== cb) return ca - cb;
+    if (a.course === 'co2') return (a.p.rank || 0) - (b.p.rank || 0);
+    var ea = examNum(a.p.exam), eb = examNum(b.p.exam);
+    if (ea !== eb) return ea - eb;
+    return (+qnum(a.q.qref) || 0) - (+qnum(b.q.qref) || 0);
+  }
+  function shuffleInPlace(arr) {
+    for (var i = arr.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+    return arr;
+  }
+
+  var DECK = [];        // current ordered/filtered list of cards
+  var idx = 0;          // position in DECK
+  var revealed = false;
+  var guessed = null;   // option index the user tapped, or null
+  var sess = { right: 0, wrong: 0 };
+
+  function buildDeck(preserveQref) {
+    var keep = CARDS.filter(function (c) {
+      if (!inScope(c)) return false;
+      if (S.cefr !== 'all' && c.p.cefr !== S.cefr) return false;
+      if (S.dedupe && S.scope === 'all' && isRepeat(c)) return false;
+      if (S.hidknown && KNOWN[c.qref]) return false;
+      return true;
+    });
+    if (S.shuffle) shuffleInPlace(keep); else keep.sort(baseSort);
+    DECK = keep;
+    var want = preserveQref || localStorage.getItem('cram-listening-pos');
+    idx = 0;
+    if (want) { for (var i = 0; i < DECK.length; i++) if (DECK[i].qref === want) { idx = i; break; } }
+    if (idx >= DECK.length) idx = 0;
+  }
+
+  /* ====================== rendering ====================== */
+  var wrap = document.getElementById('card-wrap');
+  var primaryBtn = document.getElementById('primary');
+  var starBtn = document.getElementById('star');
+  var backBtn = document.getElementById('back');
+  var stat = document.getElementById('stat');
+  var progressFill = document.getElementById('progress-fill');
+  var hint = document.getElementById('hint');
+
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function bilingual(host, fr, en, frCls) {
+    var f = el('div', 'cr-fr' + (frCls ? ' ' + frCls : ''), fr); host.appendChild(f);
+    if (!S.fr && en) host.appendChild(el('div', 'cr-en', en));
+  }
+
+  function renderCard() {
+    stopAudio();
+    wrap.innerHTML = '';
+    if (!DECK.length) { renderEmpty(); return; }
+    var c = DECK[idx];
+    revealed = S.reveal; guessed = null;
+
+    var card = el('div', 'cram-card');
+    card.classList.toggle('revealed', revealed);
+
+    // meta line
+    var meta = el('div', 'cr-meta');
+    meta.appendChild(el('span', 'cr-cefr', c.p.cefr || ''));
+    meta.appendChild(el('span', 'cr-src', srcLabel(c)));
+    if (c.course === 'co1' && DUPES[c.qref] && DUPES[c.qref].to) meta.appendChild(el('span', 'cr-dupe', '↻ repeat'));
+    if (KNOWN[c.qref]) meta.appendChild(el('span', 'cr-known', '★ known'));
+    card.appendChild(meta);
+
+    // instruction (the question stem)
+    var stem = el('div', 'cr-stem');
+    bilingual(stem, c.q.instruction.fr, c.q.instruction.en);
+    card.appendChild(stem);
+
+    // consigne (secondary prompt), if present
+    if (c.q.consigne && c.q.consigne.fr) {
+      var cons = el('div', 'cr-consigne');
+      cons.appendChild(el('span', 'cr-consigne-lbl', 'Consigne'));
+      bilingual(cons, c.q.consigne.fr, c.q.consigne.en);
+      card.appendChild(cons);
+    }
+
+    // per-passage audio clip (co2). Mock exams are one long recording — skip (no per-Q offsets).
+    if (c.p.audio && c.p.audioKind === 'clip') {
+      var ab = el('div', 'cr-audiobar');
+      var pb = el('button', 'cr-audiobtn', '▶ Play clip');
+      pb.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (!audio.paused && audio.dataset.file === c.p.audio) { audio.pause(); return; }
+        if (audio.dataset.file !== c.p.audio) { audio.src = c.p.audio; audio.dataset.file = c.p.audio; }
+        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () {});
+      });
+      audio.onplay = function () { pb.textContent = '⏸ Pause'; };
+      audio.onpause = function () { pb.textContent = '▶ Play clip'; };
+      audio.onended = function () { pb.textContent = '▶ Play clip'; };
+      ab.appendChild(pb);
+      card.appendChild(ab);
+    }
+
+    // question-level images (the A/B/C/D drawing sets)
+    (c.q.images || []).forEach(function (im) {
+      var img = el('img', 'cr-img'); img.loading = 'lazy'; img.src = 'img/' + im; card.appendChild(img);
+    });
+
+    // transcript peek (context — collapsed by default, remembers open state)
+    if (c.p.transcript && c.p.transcript.length) {
+      var det = el('details', 'cr-peek');
+      if (localStorage.getItem('cram-listening-peektr') === '1') det.open = true;
+      det.addEventListener('toggle', function () { localStorage.setItem('cram-listening-peektr', det.open ? '1' : '0'); });
+      det.appendChild(el('summary', null, '🎧 Transcript'));
+      var body = el('div', 'cr-peek-body');
+      c.p.transcript.forEach(function (s) { bilingual(body, s.fr, s.en); });
+      det.appendChild(body); card.appendChild(det);
+    }
+
+    // options
+    var opts = (c.q.options || []).filter(function (o) { return o && (o.fr || o.en || (o.is_img && o.img)); });
+    var ul = el('ul', 'cr-opts');
+    opts.forEach(function (o) {
+      var li = el('li', 'cr-opt');
+      li.dataset.correct = o.correct ? '1' : '0';
+      if (o.is_img && o.img) {
+        var im2 = el('img', 'cr-img'); im2.src = 'img/' + o.img; im2.loading = 'lazy'; li.appendChild(im2);
+      } else if (isLetter(o)) {
+        li.classList.add('cr-opt-letter');
+        li.appendChild(el('span', 'cr-opt-fr', o.fr.trim()));
+      } else {
+        bilingual(li, o.fr, o.en, 'cr-opt-fr');
+      }
+      li.addEventListener('click', function (ev) { ev.stopPropagation(); onOption(li); });
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+
+    wrap.appendChild(card);
+    wrap.scrollTop = 0;
+    paintReveal();
+    paintChrome();
+    try { localStorage.setItem('cram-listening-pos', c.qref); } catch (e) {}
+  }
+
+  function renderEmpty() {
+    var box = el('div', 'cram-empty');
+    box.appendChild(el('div', 'cram-empty-big', '✓'));
+    box.appendChild(el('div', null, S.hidknown
+      ? 'Nothing left in this set — everything here is marked ‘Got it’.'
+      : 'No cards in this set.'));
+    var b = el('button', 'cram-act primary', S.hidknown ? 'Show known again' : 'Reset');
+    b.addEventListener('click', function () {
+      if (S.hidknown) { S.hidknown = false; saveSettings(); syncToggles(); }
+      buildDeck(); renderCard();
+    });
+    box.appendChild(b);
+    wrap.innerHTML = ''; wrap.appendChild(box);
+    paintChrome();
+  }
+
+  function paintReveal() {
+    var card = wrap.querySelector('.cram-card'); if (!card) return;
+    card.classList.toggle('revealed', revealed);
+    var lis = card.querySelectorAll('.cr-opt');
+    for (var i = 0; i < lis.length; i++) {
+      var li = lis[i], correct = li.dataset.correct === '1';
+      li.classList.toggle('correct', revealed && correct);
+      li.classList.toggle('wrong', revealed && !correct && li.classList.contains('chosen'));
+    }
+    primaryBtn.textContent = revealed ? 'Next ›' : '👁 Reveal';
+    primaryBtn.classList.toggle('go', revealed);
+  }
+
+  function paintChrome() {
+    var n = DECK.length, pos = n ? idx + 1 : 0;
+    progressFill.style.width = n ? (100 * pos / n) + '%' : '0%';
+    var tally = (sess.right || sess.wrong) ? '  ·  ✓' + sess.right + ' ✗' + sess.wrong : '';
+    stat.textContent = n ? (pos + ' / ' + n + tally) : '0 / 0';
+    var c = DECK[idx];
+    var known = c && KNOWN[c.qref];
+    starBtn.classList.toggle('on', !!known);
+    starBtn.textContent = known ? '★ Known' : '☆ Got it';
+    backBtn.disabled = !DECK.length || idx <= 0;
+  }
+
+  /* ====================== interaction ====================== */
+  function onOption(li) {
+    if (revealed) return;
+    li.classList.add('chosen');
+    if (li.dataset.correct === '1') sess.right++; else sess.wrong++;
+    revealed = true; paintReveal(); paintChrome();
+  }
+  function primaryAction() {
+    if (!revealed) { revealed = true; paintReveal(); paintChrome(); }
+    else next();
+  }
+  function next() {
+    if (!DECK.length) return;
+    if (idx + 1 >= DECK.length) { renderDone(); return; }
+    idx++; renderCard();
+  }
+  function prev() {
+    if (!DECK.length || idx === 0) return;
+    idx--; renderCard();
+  }
+  function toggleKnown() {
+    var c = DECK[idx]; if (!c) return;
+    if (KNOWN[c.qref]) delete KNOWN[c.qref]; else KNOWN[c.qref] = 1;
+    saveKnown();
+    if (S.hidknown && KNOWN[c.qref]) { var q = (DECK[idx + 1] || DECK[idx - 1] || {}).qref; buildDeck(q); renderCard(); }
+    else { paintChrome(); var card = wrap.querySelector('.cram-card'); if (card) renderCard(); }
+  }
+
+  function renderDone() {
+    stopAudio();
+    var reviewed = DECK.length;
+    var box = el('div', 'cram-empty');
+    box.appendChild(el('div', 'cram-empty-big', '🏁'));
+    box.appendChild(el('div', null, 'End of this set — ' + reviewed + ' card' + (reviewed === 1 ? '' : 's') + '.'
+      + ((sess.right || sess.wrong) ? '  You guessed ✓' + sess.right + ' / ✗' + sess.wrong + '.' : '')));
+    var row = el('div', 'cram-empty-row');
+    var again = el('button', 'cram-act primary', S.shuffle ? '🔀 Shuffle again' : '↺ Restart');
+    again.addEventListener('click', function () { sess = { right: 0, wrong: 0 }; buildDeck(); idx = 0; renderCard(); });
+    row.appendChild(again);
+    box.appendChild(row);
+    wrap.innerHTML = ''; wrap.appendChild(box);
+    progressFill.style.width = '100%';
+    stat.textContent = reviewed + ' / ' + reviewed + ((sess.right || sess.wrong) ? '  ·  ✓' + sess.right + ' ✗' + sess.wrong : '');
+  }
+
+  document.getElementById('stage').addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.closest && (t.closest('.cr-opt') || t.closest('details') || t.closest('a') ||
+      t.closest('button') || t.closest('.cram-empty'))) return;
+    primaryAction();
+  });
+  primaryBtn.addEventListener('click', function (e) { e.stopPropagation(); primaryAction(); });
+  starBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleKnown(); });
+  backBtn.addEventListener('click', function (e) { e.stopPropagation(); prev(); });
+  document.getElementById('prev').addEventListener('click', function (e) { e.stopPropagation(); prev(); });
+  document.getElementById('next-arrow').addEventListener('click', function (e) { e.stopPropagation(); next(); });
+  document.getElementById('reset').addEventListener('click', function () { sess = { right: 0, wrong: 0 }; buildDeck(); idx = 0; renderCard(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); primaryAction(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prev(); }
+    else if (e.key === 'r' || e.key === 'R') { if (!revealed) { revealed = true; paintReveal(); paintChrome(); } }
+    else if (e.key === 'k' || e.key === 'K') { toggleKnown(); }
+    else if (e.key === 's' || e.key === 'S') { setToggle('shuffle', !S.shuffle); }
+  });
+
+  // swipe (touch): left = next, right = prev
+  var tsx = 0, tsy = 0, tst = 0;
+  var stage = document.getElementById('stage');
+  stage.addEventListener('touchstart', function (e) { var t = e.changedTouches[0]; tsx = t.clientX; tsy = t.clientY; tst = Date.now(); }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    var t = e.changedTouches[0], dx = t.clientX - tsx, dy = t.clientY - tsy;
+    if (Date.now() - tst < 600 && Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      if (dx < 0) next(); else prev();
+    }
+  }, { passive: true });
+
+  /* ====================== controls ====================== */
+  var scopeEl = document.getElementById('scope');
+  var SCOPES = [['all', 'All'], ['co2', '2026'], ['co1', 'Mocks']];
+  function renderScope() {
+    scopeEl.innerHTML = '';
+    SCOPES.forEach(function (d) {
+      var counts = CARDS.filter(function (c) { return d[0] === 'all' ? true : c.course === d[0]; }).length;
+      var b = el('button', 'chip' + (S.scope === d[0] ? ' on' : ''), d[1] + ' ' + counts);
+      b.addEventListener('click', function () { if (S.scope === d[0]) return; S.scope = d[0]; saveSettings(); renderScope(); renderCefr(); buildDeck(); idx = 0; sess = { right: 0, wrong: 0 }; renderCard(); });
+      scopeEl.appendChild(b);
+    });
+    document.getElementById('t-dedupe').style.display = S.scope === 'all' ? '' : 'none';
+  }
+
+  // CEFR level filter — counts reflect the current scope
+  var cefrEl = document.getElementById('cefr');
+  var BANDS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  function renderCefr() {
+    var sc = CARDS.filter(inScope);
+    var counts = {}; BANDS.forEach(function (b) { counts[b] = 0; });
+    sc.forEach(function (c) { if (counts[c.p.cefr] != null) counts[c.p.cefr]++; });
+    cefrEl.innerHTML = '';
+    cefrEl.appendChild(el('span', 'cram-row-lbl', 'Level'));
+    [['all', 'All ' + sc.length]].concat(BANDS.map(function (b) { return [b, b + ' ' + (counts[b] || 0)]; })).forEach(function (d) {
+      var b = el('button', 'chip' + (S.cefr === d[0] ? ' on' : ''), d[1]);
+      b.addEventListener('click', function () {
+        if (S.cefr === d[0]) return;
+        S.cefr = d[0]; saveSettings(); renderCefr();
+        buildDeck(); idx = 0; sess = { right: 0, wrong: 0 }; renderCard();
+      });
+      cefrEl.appendChild(b);
+    });
+  }
+  function bindToggle(id, key) {
+    var b = document.getElementById(id);
+    b.addEventListener('click', function () { setToggle(key, !S[key]); });
+  }
+  function setToggle(key, val) {
+    S[key] = val; saveSettings(); syncToggles();
+    if (key === 'reveal' || key === 'fr') {
+      if (key === 'reveal') { revealed = S.reveal; }
+      renderCard();
+    } else {
+      var q = DECK.length ? DECK[idx].qref : null;
+      buildDeck(q); renderCard();
+    }
+  }
+  function syncToggles() {
+    document.getElementById('t-reveal').classList.toggle('on', S.reveal);
+    document.getElementById('t-shuffle').classList.toggle('on', S.shuffle);
+    document.getElementById('t-dedupe').classList.toggle('on', S.dedupe);
+    document.getElementById('t-fr').classList.toggle('on', S.fr);
+    document.getElementById('t-hidknown').classList.toggle('on', S.hidknown);
+    renderScope();
+    renderCefr();
+  }
+  bindToggle('t-reveal', 'reveal');
+  bindToggle('t-shuffle', 'shuffle');
+  bindToggle('t-dedupe', 'dedupe');
+  bindToggle('t-fr', 'fr');
+  bindToggle('t-hidknown', 'hidknown');
+
+  var hintDone = localStorage.getItem('cram-listening-hint') === '1';
+  if (hintDone) hint.style.display = 'none';
+  function killHint() { if (hintDone) return; hintDone = true; localStorage.setItem('cram-listening-hint', '1'); hint.style.display = 'none'; }
+  document.getElementById('stage').addEventListener('click', killHint);
+  primaryBtn.addEventListener('click', killHint);
+
+  /* ====================== boot ====================== */
+  syncToggles();
+  buildDeck();
+  renderCard();
+})();
