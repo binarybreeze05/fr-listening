@@ -152,17 +152,26 @@
     if (c.p.audio && c.p.audioKind === 'clip') {
       var ab = el('div', 'cr-audiobar');
       var pb = el('button', 'cr-audiobtn', '▶ Play clip');
+      var playClip = function (restart) {
+        if (audio.dataset.file !== c.p.audio) { audio.src = c.p.audio; audio.dataset.file = c.p.audio; }
+        else if (restart) { try { audio.currentTime = 0; } catch (e) {} }
+        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () {});
+      };
       pb.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        if (!audio.paused && audio.dataset.file === c.p.audio) { audio.pause(); return; }
-        if (audio.dataset.file !== c.p.audio) { audio.src = c.p.audio; audio.dataset.file = c.p.audio; }
-        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () {});
+        if (!audio.paused && audio.dataset.file === c.p.audio) audio.pause();
+        else playClip(audio.ended);   // resume where paused, or restart if it finished
       });
       audio.onplay = function () { pb.textContent = '⏸ Pause'; };
       audio.onpause = function () { pb.textContent = '▶ Play clip'; };
-      audio.onended = function () { pb.textContent = '▶ Play clip'; };
+      audio.onended = function () { pb.textContent = '↻ Replay clip'; };
       ab.appendChild(pb);
       card.appendChild(ab);
+      // Auto-play the clip when the card first appears (its listen-&-answer state).
+      // Revealing an answer doesn't re-render the card, so the clip never replays
+      // on reveal. In "Answers" (auto-reveal) mode the card opens already revealed,
+      // so we don't auto-play there either.
+      if (!revealed) playClip(true);
     }
 
     // question-level images (the A/B/C/D drawing sets)
