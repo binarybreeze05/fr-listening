@@ -22,7 +22,7 @@
   paintThemeIcon();
 
   /* ---- settings (persisted) ---- */
-  var S = { scope: 'all', cefr: 'all', shuffle: false, reveal: false, dedupe: false, fr: false, hidknown: false };
+  var S = { scope: 'all', cefr: 'all', shuffle: false, reveal: false, dedupe: false, fr: false, hidknown: false, timer: true };
   try { var saved = JSON.parse(localStorage.getItem('cram-listening-set') || '{}'); for (var k in saved) if (k in S) S[k] = saved[k]; } catch (e) {}
   function saveSettings() { try { localStorage.setItem('cram-listening-set', JSON.stringify(S)); } catch (e) {} }
 
@@ -85,6 +85,7 @@
   var revealed = false;
   var guessed = null;   // option index the user tapped, or null
   var sess = { right: 0, wrong: 0 };
+  var autoTimer = null; // 10s auto-advance timeout handle
 
   function buildDeck(preserveQref) {
     var keep = CARDS.filter(function (c) {
@@ -109,6 +110,8 @@
   var backBtn = document.getElementById('back');
   var stat = document.getElementById('stat');
   var progressFill = document.getElementById('progress-fill');
+  var timerbar = document.getElementById('timerbar');
+  var timerfill = document.getElementById('timerfill');
   var hint = document.getElementById('hint');
 
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
@@ -117,10 +120,35 @@
     if (!S.fr && en) host.appendChild(el('div', 'cr-en', en));
   }
 
+  /* ---- 10s auto-advance timer + depleting countdown bar ---- */
+  var AUTO_MS = 10000;
+  function hideTimerBar() {
+    timerbar.style.display = 'none';
+    timerfill.style.transition = 'none';
+    timerfill.style.width = '100%';
+  }
+  function runTimerBar() {
+    timerbar.style.display = '';
+    timerfill.style.transition = 'none';
+    timerfill.style.width = '100%';
+    void timerfill.offsetWidth;                                    // reflow so the next line animates
+    timerfill.style.transition = 'width ' + (AUTO_MS / 1000) + 's linear';
+    timerfill.style.width = '0%';
+  }
+  function clearTimer() { if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; } }
+  function stopTimer() { clearTimer(); hideTimerBar(); }
+  function startTimer() {
+    clearTimer();
+    if (!S.timer || !DECK.length) { hideTimerBar(); return; }
+    runTimerBar();
+    autoTimer = setTimeout(function () { autoTimer = null; next(); }, AUTO_MS);
+  }
+
   function renderCard() {
     stopAudio();
+    clearTimer();
     wrap.innerHTML = '';
-    if (!DECK.length) { renderEmpty(); return; }
+    if (!DECK.length) { renderEmpty(); hideTimerBar(); return; }
     var c = DECK[idx];
     revealed = S.reveal; guessed = null;
 
@@ -179,10 +207,10 @@
       var img = el('img', 'cr-img'); img.loading = 'lazy'; img.src = 'img/' + im; card.appendChild(img);
     });
 
-    // transcript peek (context — collapsed by default, remembers open state)
+    // transcript peek (context — shown open by default; you can still collapse it, remembered)
     if (c.p.transcript && c.p.transcript.length) {
       var det = el('details', 'cr-peek');
-      if (localStorage.getItem('cram-listening-peektr') === '1') det.open = true;
+      if (localStorage.getItem('cram-listening-peektr') !== '0') det.open = true;
       det.addEventListener('toggle', function () { localStorage.setItem('cram-listening-peektr', det.open ? '1' : '0'); });
       det.appendChild(el('summary', null, '🎧 Transcript'));
       var body = el('div', 'cr-peek-body');
@@ -213,6 +241,7 @@
     wrap.scrollTop = 0;
     paintReveal();
     paintChrome();
+    startTimer();
     try { localStorage.setItem('cram-listening-pos', c.qref); } catch (e) {}
   }
 
@@ -293,6 +322,7 @@
 
   function renderDone() {
     stopAudio();
+    stopTimer();
     var reviewed = DECK.length;
     var box = el('div', 'cram-empty');
     box.appendChild(el('div', 'cram-empty-big', '🏁'));
@@ -380,7 +410,9 @@
   }
   function setToggle(key, val) {
     S[key] = val; saveSettings(); syncToggles();
-    if (key === 'reveal' || key === 'fr') {
+    if (key === 'timer') {
+      if (S.timer) startTimer(); else stopTimer();   // just arm/disarm; don't disturb the card or audio
+    } else if (key === 'reveal' || key === 'fr') {
       if (key === 'reveal') { revealed = S.reveal; }
       renderCard();
     } else {
@@ -390,6 +422,7 @@
   }
   function syncToggles() {
     document.getElementById('t-reveal').classList.toggle('on', S.reveal);
+    document.getElementById('t-timer').classList.toggle('on', S.timer);
     document.getElementById('t-shuffle').classList.toggle('on', S.shuffle);
     document.getElementById('t-dedupe').classList.toggle('on', S.dedupe);
     document.getElementById('t-fr').classList.toggle('on', S.fr);
@@ -398,6 +431,7 @@
     renderCefr();
   }
   bindToggle('t-reveal', 'reveal');
+  bindToggle('t-timer', 'timer');
   bindToggle('t-shuffle', 'shuffle');
   bindToggle('t-dedupe', 'dedupe');
   bindToggle('t-fr', 'fr');
