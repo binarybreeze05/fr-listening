@@ -129,6 +129,7 @@
   }
   function runTimerBar() {
     timerbar.style.display = '';
+    timerbar.classList.toggle('phase2', revealed);                 // green while counting down to the next card
     timerfill.style.transition = 'none';
     timerfill.style.width = '100%';
     void timerfill.offsetWidth;                                    // reflow so the next line animates
@@ -141,7 +142,11 @@
     clearTimer();
     if (!S.timer || !DECK.length) { hideTimerBar(); return; }
     runTimerBar();
-    autoTimer = setTimeout(function () { autoTimer = null; next(); }, AUTO_MS);
+    autoTimer = setTimeout(function () {
+      autoTimer = null;
+      if (!revealed) doReveal();   // 1st countdown: reveal the answer (and start the 2nd countdown)
+      else next();                 // 2nd countdown: advance to the next card
+    }, AUTO_MS);
   }
 
   function renderCard() {
@@ -292,6 +297,7 @@
     revealed = true;
     stopAudio();            // revealing the answer stops the clip (no more listening needed)
     paintReveal(); paintChrome();
+    startTimer();           // begin the 2nd 10s countdown (revealed → next card)
   }
   function onOption(li) {
     if (revealed) return;
