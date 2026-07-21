@@ -225,7 +225,7 @@ body.drill .qcard.answered ul.opts li.wrong .fr::after{content:" ✗";color:var(
 .cram-bar{background:var(--side);color:var(--sideink);padding:10px 14px;flex:0 0 auto;box-shadow:0 2px 10px rgba(0,0,0,.14);z-index:3}
 .cram-bar-top{display:flex;align-items:center;gap:12px}
 .cram-bar-top h1{font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin:0;color:#fff;opacity:.92;flex:0 0 auto}
-.cram-bar-top .modenav{flex:1;max-width:360px;margin:0}
+.cram-bar-top .modenav{flex:1;max-width:470px;margin:0}
 .cram-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:11px}
 .cram-controls .chip{white-space:nowrap}
 .cram-sep{width:1px;height:18px;background:rgba(255,255,255,.16);margin:0 4px}
@@ -333,4 +333,22 @@ body.drill .qcard.answered ul.opts li.wrong .fr::after{content:" ✗";color:var(
   .cram-card{padding:17px 16px;border-radius:12px}
   .cr-stem{font-size:18px}
   .cram-act{padding:16px 16px}
+}
+
+/* ====================== 🎯 Drill mode (drill.html) ====================== */
+/* Full recording with a native scrubber, parked between the header and the card so it
+   survives card changes (stepping through one mock exam keeps its playback position). */
+.drill-audio{flex:0 0 auto;background:var(--card);border-bottom:1px solid var(--headborder);
+  padding:9px 16px 11px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.drill-audio-label{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.drill-audio audio{width:100%;height:36px;display:block}
+
+/* nothing English — and no transcript — until the card is revealed */
+.drill-card:not(.revealed) .cr-en{display:none}
+.drill-card .drill-only-reveal{display:none}
+.drill-card.revealed .drill-only-reveal{display:block}
+.drill-peek-head{font-size:12px;font-weight:700;color:var(--muted);padding:9px 13px;border-bottom:1px solid var(--cardbd)}
+
+@media(max-width:680px){
+  .drill-audio{padding:8px 10px 10px}
 }

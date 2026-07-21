@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Listening — ⚡ Cram (recognition drill)</title>
+<title>Listening — 🎯 Drill (audio → answer → reveal)</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="googlebot" content="noindex, nofollow">
 <script>/* apply saved theme before paint */
@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Cram">
+<meta name="apple-mobile-web-app-title" content="Drill">
 </head>
 <body class="cram-body">
 <div id="cram">
@@ -26,20 +26,18 @@
       <div class="modenav">
         <a class="modetab" href="index.html">🎧 2026</a>
         <a class="modetab" href="exams.html">💿 Mocks</a>
-        <a class="modetab active" href="cram.html">⚡ Cram</a>
-        <a class="modetab" href="drill.html">🎯 Drill</a>
+        <a class="modetab" href="cram.html">⚡ Cram</a>
+        <a class="modetab active" href="drill.html">🎯 Drill</a>
       </div>
       <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button>
     </div>
     <div class="cram-controls" id="controls">
       <div class="cram-scope" id="scope"></div>
       <span class="cram-sep"></span>
-      <button class="chip toggle" id="t-reveal" title="Show the correct answer immediately (skip the reveal tap)">👁 Answers</button>
-      <button class="chip toggle" id="t-timer" title="After 10s reveal the answer, then 10s later go to the next card">⏱ 10s</button>
-      <button class="chip toggle" id="t-shuffle" title="Random order — reshuffles each pass">🔀 Shuffle</button>
+      <button class="chip toggle" id="t-shuffle" title="Random card order — reshuffles each pass">🔀 Shuffle</button>
       <button class="chip toggle" id="t-dedupe" title="Skip questions that repeat across the 2026 course and the mock exams (keep the 2026 copy)">⧉ Dedupe</button>
-      <button class="chip toggle" id="t-fr" title="Hide the English translations">🇫🇷 FR only</button>
       <button class="chip toggle" id="t-hidknown" title="Skip cards you've marked ‘Got it’">★ Hide known</button>
+      <button class="chip toggle" id="t-autoplay" title="Start the recording automatically when a new one loads">▶ Autoplay</button>
     </div>
     <div class="cram-cefr" id="cefr"></div>
     <div class="cram-status">
@@ -47,8 +45,12 @@
       <div class="cram-stat" id="stat"></div>
       <button class="cram-reset" id="reset" title="Start this set from the beginning">↺ Restart</button>
     </div>
-    <div class="cram-timerbar" id="timerbar"><div class="cram-timerbar-fill" id="timerfill"></div></div>
   </header>
+
+  <div class="drill-audio">
+    <div class="drill-audio-label" id="audio-label"></div>
+    <audio id="player" controls preload="metadata" playsinline></audio>
+  </div>
 
   <main class="cram-stage" id="stage">
     <button class="cram-arrow prev" id="prev" title="Previous (←)" aria-label="Previous">‹</button>
@@ -62,12 +64,12 @@
     <button class="cram-act primary" id="primary">Reveal</button>
   </footer>
 
-  <div class="cram-hint" id="hint">Tap the card (or <b>Reveal</b>) to show the answer · tap again for the next · ← / → to move</div>
+  <div class="cram-hint" id="hint">Listen, pick an option, then <b>Reveal</b> for the transcript + English · options are reshuffled every time · ← / → to move</div>
 </div>
 
 <script src="data.js?v=2"></script>
 <script src="dupes.js?v=1"></script>
-<script src="cram.js?v=5"></script>
+<script src="drill.js?v=1"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
